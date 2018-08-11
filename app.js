@@ -7,7 +7,8 @@ var API_TYPE = `${SERVER}/SportsBook.API/web?lid=10&zid=0&pd=%23AS%23B1%23&cid=4
 var API_CATEGORY = `${SERVER}/SportsBook.API/web?lid=10&zid=0&pd=%23AS%23B1%23C1%23D13%23E%23F%23O1%23&cid=42&ctid=42`;
 
 // 赔率, /web?lid=10&zid=0&pd=#AC#B1#C1#D13#E37628398#F2#&cid=42&ctid=42
-var API_ODDS = `${SERVER}/SportsBook.API/web?lid=10&zid=0&pd=%23AC%23B1%23C1%23D13%23E37628398%23F2%23&cid=42&ctid=42`;
+//var API_ODDS = `${SERVER}/SportsBook.API/web?lid=10&zid=0&pd=%23AC%23B1%23C1%23D13%23E37628398%23F2%23&cid=42&ctid=42`;
+var API_ODDS = `${SERVER}/SportsBook.API/web?lid=10&zid=0&pd=%23AC%23B1%23C1%23D13%23E104%23F16%23S1%23&cid=42&ctid=42`
 
 var Game = require('./libs/SoccerGame');
 var J = require('./libs/JSON');
@@ -57,7 +58,7 @@ request
 
     let properties = J.getProperties(jsons);
     let filtered = jsons.filter((item, index, arr)=>{
-        return !!item.FI && item.NA && !/\d+/.test(item.NA) && !item.AH;
+        return !!item.FI && item.NA && !/^\d+$/.test(item.NA) && !item.AH;
     })
 
     let filtered_odds = jsons.filter((item, index, arr)=>{
@@ -93,13 +94,13 @@ request
             
             matches[item.FI].begin_time = beijing_time;
         }
-        else if(item.EX){
-            matches[item.FI].guest_team = item.NA;          // 客队名
-            matches[item.FI].guest_odds = getOddsById(item.ID, filtered_odds);  // 客队胜，赔率
-            matches[item.FI].analyse_url = item.EX;         // 两队历史数据
+        else if(item.NA == '平局'){
+            matches[item.FI].equal_odds = getOddsById(item.ID, filtered_odds);       // 平局，赔率
         }
         else{
-            matches[item.FI].equal_odds = getOddsById(item.ID, filtered_odds);       // 平局，赔率
+            matches[item.FI].guest_team = item.NA;          // 客队名
+            matches[item.FI].guest_odds = getOddsById(item.ID, filtered_odds);  // 客队胜，赔率
+            matches[item.FI].analyse_url = item.EX || '';         // 两队历史数据
         }
         
     })
@@ -111,10 +112,16 @@ request
 
         let n = new Date;
         n = matches[item].begin_time;
-        console.log(n.getFullYear() + '/' + (n.getMonth()+1) + '/' + n.getDate() + ' ' + n.getHours() + ':' + n.getMinutes()+':' + n.getSeconds() + ' ' 
+        if(!n){
+            console.log(matches[item])
+        }
+        else{
+            console.log(n.getFullYear() + '/' + (n.getMonth()+1) + '/' + n.getDate() + ' ' + n.getHours() + ':' + n.getMinutes()+':' + n.getSeconds() + ' ' 
         + matches[item].host_team +'('+matches[item].host_odds+')' + 
         '/' + matches[item].guest_team +'('+matches[item].guest_odds+')' +
         '平局('+matches[item].equal_odds+')');
+        }
+
 
         len ++;
     }
