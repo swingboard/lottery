@@ -12,6 +12,7 @@ var API_ODDS = `${SERVER}/SportsBook.API/web?lid=10&zid=0&pd=%23AC%23B1%23C1%23D
 
 var Game = require('./libs/SoccerGame');
 var J = require('./libs/JSON');
+var {sequelize, Game, Odds} = require('./libs/sequelize');
 var request = require('superagent');
 require('superagent-proxy')(request);
 
@@ -70,6 +71,7 @@ request
         matches[item.FI] = matches[item.FI] || {};
         //matches[item.FI].id = 1;
         matches[item.FI].created_time = new Date();
+        matches[item.FI].bet365_id = item.FI;
 
         if(item.BC){
             // 主队名
@@ -110,17 +112,35 @@ request
     let len = 0;
     for(let item in matches){
 
-        let n = new Date;
-        n = matches[item].begin_time;
-        if(!n){
-            console.log(matches[item])
-        }
-        else{
-            console.log(n.getFullYear() + '/' + (n.getMonth()+1) + '/' + n.getDate() + ' ' + n.getHours() + ':' + n.getMinutes()+':' + n.getSeconds() + ' ' 
-        + matches[item].host_team +'('+matches[item].host_odds+')' + 
-        '/' + matches[item].guest_team +'('+matches[item].guest_odds+')' +
-        '平局('+matches[item].equal_odds+')');
-        }
+        // let n = new Date;
+        // n = matches[item].begin_time;
+        // if(!n){
+        //     console.log(matches[item])
+        // }
+        // else{
+        //     console.log(n.getFullYear() + '/' + (n.getMonth()+1) + '/' + n.getDate() + ' ' + n.getHours() + ':' + n.getMinutes()+':' + n.getSeconds() + ' ' 
+        // + matches[item].host_team +'('+matches[item].host_odds+')' + 
+        // '/' + matches[item].guest_team +'('+matches[item].guest_odds+')' +
+        // '平局('+matches[item].equal_odds+')');
+        // }
+        let match = matches[item];
+        //console.log(JSON.stringify(match))
+        Game.findOrCreate({
+            where: {
+                bet365_id: match.bet365_id
+            }, 
+            defaults: {
+                host_team: match.host_team, 
+                guest_team: match.guest_team,
+                begin_time: match.begin_time,
+                analyse_url: match.analyse_url,
+                created_time: match.created_time,
+                bet365_id: match.bet365_id
+            }
+        })
+        .spread((game, created) => {
+            
+        })
 
 
         len ++;
