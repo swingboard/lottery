@@ -2,7 +2,8 @@ const Sequelize = require('sequelize');
 module.exports = {
     id: {
         type: Sequelize.INTEGER,
-        primaryKey: true
+        primaryKey: true,
+        autoIncrement: true
     },
     host_team: {
         type: Sequelize.STRING
@@ -24,5 +25,8 @@ module.exports = {
     },
     bet365_id: {
         type: Sequelize.INTEGER
+    },
+    bet365_category_id: {
+        type: Sequelize.STRING
     }
 };

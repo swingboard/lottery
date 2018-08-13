@@ -2,7 +2,8 @@ const Sequelize = require('sequelize');
 module.exports = {
     id: {
         type: Sequelize.INTEGER,
-        primaryKey: true
+        primaryKey: true,
+        autoIncrement: true
     },
     bet365_id: {
         type: Sequelize.STRING
