@@ -267,10 +267,12 @@ let task4 = (categoryArr)=>{
                         jsons = J.getJSONs(res.text);
                     }
         
+                    // 比赛信息
                     let filtered = jsons.filter((item, index, arr)=>{
                         return !!item.FI && item.NA && !/^\d+$/.test(item.NA) && !item.AH;
                     })
         
+                    // 赔率信息
                     let filtered_odds = jsons.filter((item, index, arr)=>{
                         return !!item.FI && !item.NA && item.OD && !item.HA;
                     })
@@ -293,6 +295,7 @@ let task4 = (categoryArr)=>{
                             matches[item.FI].begin_time = item.BC;          
                             
                             // 20180810200000
+                            
                             let time_str = item.BC + '';
                             let year = parseInt(time_str.slice(0, 4)),
                             month = parseInt(time_str.slice(4, 6)),
@@ -301,9 +304,11 @@ let task4 = (categoryArr)=>{
                             minitue = parseInt(time_str.slice(10, 12)),
                             secends = parseInt(time_str.slice(12, 14));
                             let time = new Date(year, month-1, day, hour, minitue, secends);
-                            let beijing_time = new Date(time.getTime() + 7*3600*1000);
+                            let beijing_time = new Date(time.getTime() + 15*3600*1000);
                             
                             matches[item.FI].begin_time = beijing_time;
+                            // console.log(`BC:${item.BC}, ${year}, ${month}, ${day}, ${hour}, ${minitue}, ${secends}, ${beijing_time}`)
+                            // BC:20180816194500, 2018, 8, 16, 19, 45, 0, Fri Aug 17 2018 02:45:00 GMT+0800 (CST)
                         }
                         else if(item.NA == '平局'){
                             matches[item.FI].equal_odds = getOddsById(item.ID, filtered_odds);       // 平局，赔率
@@ -323,6 +328,8 @@ let task4 = (categoryArr)=>{
                         let match = matches[item];
                         
                         setTimeout(()=>{
+
+                            // 保存比赛信息
                             Game.findOrCreate({
                                 where: {
                                     bet365_id: match.bet365_id
@@ -349,6 +356,15 @@ let task4 = (categoryArr)=>{
                                 if(count == categoryArr.length){
                                     resolve(matches);
                                 }
+                            });
+
+                            // 保存赔率信息
+                            Odds.create({
+                                host_odds: match.host_odds,
+                                guest_odds: match.guest_odds,
+                                equal_odds: match.equal_odds,
+                                bet365_id: match.bet365_id,
+                                created_time: match.created_time
                             })
                         }, 3500 * index);
                     }
