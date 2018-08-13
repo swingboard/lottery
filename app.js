@@ -4,6 +4,7 @@ var J = require('./libs/JSON');
 var {sequelize, Game, Odds, GameType, GameCategory, GameSubCategory} = require('./libs/sequelize');
 var request = require('superagent');
 require('superagent-proxy')(request);
+var chalk = require('chalk');
 
 let getOddsById = (id, arr)=>{
     let ret = '', i, sep;
@@ -45,13 +46,14 @@ let task1 = (id)=>{
             }
         })
         .then((gameType) => {
-            if(gameType.name){
-                console.log(`第一步成功${gameType.name}`) 
-                resolve(gameType)
-            }
-            else{
-                reject(gameType)
-            }
+            console.log(`第一步成功${gameType}`) 
+            resolve(gameType)
+        })
+        .catch((reason)=>{
+            //console.log(reason.parent);
+            console.log(chalk.red(reason));
+            //console.log(reason.sql);
+            reject(reason)
         })
     })
 }
@@ -72,16 +74,24 @@ let task2 = (gameType)=>{
             // console.log(res.status, res.headers);
             // console.log(res.text);
             // res.body，和res.text有啥区别？
+            
+            if(!res || err){
+                console.log(chalk.red('task2' + JSON.stringify(err)))
+                reject(err);
+                return;
+            }
 
-            let jsons = J.getJSONs(res.text);
+            let jsons = [];
+            if(res && res.text){
+                jsons = J.getJSONs(res.text);
+            }
+            
+            // 筛选出, 欧洲、德国、英国等划分区域
             jsons = jsons.filter((item, index, arr)=>{
-                
-                //return (item.MA == '' && item.IT && item.NA) || (item.PA == '' && item.IT && item.NA)
                 return (item.MA == '' && item.IT && item.NA);
             })
 
             let results = [];
-            let ma_pd = false, i=0;
             let count = 0;
             jsons.forEach((item, index, arr)=>{
                 
@@ -92,7 +102,6 @@ let task2 = (gameType)=>{
                 }
                 
                 obj.father_category = pd;
-                ma_pd = item.PD;
                 results.push(obj);
 
                 GameCategory.findOrCreate({
@@ -103,7 +112,19 @@ let task2 = (gameType)=>{
                 })
                 .spread((gameCategory, created)=>{
                     count ++;
-                    console.log(gameCategory + (created?'创建成':'找到了'))
+                    //console.log(JSON.stringify(gameCategory));
+                    console.log(gameCategory + (created?'创建一个顶级类目':'找到一个顶级类目'))
+                    if(count == jsons.length){
+                        resolve(results);
+                    }
+                })
+                .catch((reason)=>{
+                    count ++;
+                    console.log(chalk.red('task,findOrcreate报错,'));
+                    console.log(chalk.red(reason))
+                    console.log(chalk.red('item:' + JSON.stringify(item)));
+                    console.log(chalk.red('obj:' + JSON.stringify(obj)));
+                    
                     if(count == jsons.length){
                         resolve(results);
                     }
@@ -111,7 +132,7 @@ let task2 = (gameType)=>{
                 
             })
 
-        });
+        })
     })
 }
 
@@ -119,12 +140,10 @@ let task2 = (gameType)=>{
 // 查询各个赛区的比赛赔率
 let task3 = (categoryArr)=>{
     
-    console.log('task3')
-    
     return new Promise((resolve, reject)=>{
 
-        let count = 0,
-        gameSubCategoryArr = [];
+        let count = 0;
+        let results = [];
 
         categoryArr.forEach((item, index, arr)=>{
 
@@ -137,18 +156,29 @@ let task3 = (categoryArr)=>{
                 })
                 .proxy('http://127.0.0.1:8888')
                 .end((err, res) => {
-                    //console.log(res.status, res.headers);
-                    //console.log(res.text + '\r\n');
-                    // res.body，和res.text有啥区别？
     
-                    let jsons = J.getJSONs(res.text);
+                    if(!res || err){
+                        count ++;
+                        console.log(chalk.red('task3' + JSON.stringify(err)) + ', pd:' +item.bet365_pd)
+
+                        if(count == categoryArr.length){
+                            resolve(results);
+                        }
+                        // reject(err);
+                        return;
+                    }
+
+                    let jsons = [];
+                    if(res && res.text){
+                        jsons = J.getJSONs(res.text);
+                    }
+                    
                     jsons = jsons.filter((item, index, arr)=>{
                         return (item.PA == '' && item.IT && item.NA);
                     })
     
-    
-                    let results = [];
-                    let count = 0;
+                    
+                    let count_inner = 0;
                     jsons.forEach((subItem, index, arr)=>{
                         
                         let obj = {
@@ -160,33 +190,43 @@ let task3 = (categoryArr)=>{
                         obj.father_category = item.bet365_pd;
                         results.push(obj);
 
-                        console.log('task3, xx')
-                        console.log(obj);
-    
-                        GameSubCategory.findOrCreate({
-                            where: {
-                                bet365_pd: obj.bet365_pd
-                            },
-                            defaults: obj
-                        })
-                        .spread((gameCategory, created)=>{
-                            count ++;
-                            console.log(gameCategory + (created?'task3创建成':'task3找到了'))
-                            if(count == jsons.length){
-                                resolve(results);
-                            }
-                        })
+                        setTimeout(()=>{
+                            GameSubCategory.findOrCreate({
+                                where: {
+                                    bet365_pd: obj.bet365_pd
+                                },
+                                defaults: obj
+                            })
+                            .spread((gameCategory, created)=>{
+                                count_inner ++;
+                                console.log(gameCategory + (created?'task3创建成':'task3找到了'))
+                                if(count_inner == jsons.length){
+                                    count ++;
+                                    if(count == categoryArr.length){
+                                        resolve(results);
+                                    }
+                                }
+                            })
+                            .catch((reason)=>{
+                                count ++;
+                                console.log(chalk.red(JSON.stringify(obj) + 'task3异常' + reason.original));
+                                if(count_inner == jsons.length){
+                                    count ++;
+                                    if(count == categoryArr.length){
+                                        resolve(results);
+                                    }
+                                }
+                            })
+                        }, 1500 * index)
                         
                     })
                     
                 });
 
 
-            }, 1000*index)
+            }, 1500*index)
             
         })
-
-        
     })
 }
 
@@ -195,8 +235,7 @@ let task3 = (categoryArr)=>{
 // 查询各个赛区的比赛赔率
 let task4 = (categoryArr)=>{
 
-    
-    console.log('task3')
+    console.log('task4')
     
     return new Promise((resolve, reject)=>{
 
@@ -204,109 +243,126 @@ let task4 = (categoryArr)=>{
 
         categoryArr.forEach((item, index, arr)=>{
 
-            let api_url = getUrlByPd(item.bet365_pd);
+            let api_url = getUrlByPd(item.bet365_pd),
+            bet365_category_id = item.bet365_id;
 
-            request.get(api_url).timeout({
-                response: 5000
-            })
-            .proxy('http://127.0.0.1:8888')
-            .end((err, res) => {
-                //console.log(res.status, res.headers);
-                // console.log(res.text);
-                // res.body，和res.text有啥区别？
-    
-                let jsons = J.getJSONs(res.text);
-    
+            setTimeout(()=>{
 
-                // let properties = J.getProperties(jsons);
-                let filtered = jsons.filter((item, index, arr)=>{
-                    return !!item.FI && item.NA && !/^\d+$/.test(item.NA) && !item.AH;
+                request.get(api_url).timeout({
+                    response: 5000
                 })
-    
-                let filtered_odds = jsons.filter((item, index, arr)=>{
-                    return !!item.FI && !item.NA && item.OD && !item.HA;
-                })
-    
-                let matches = {};
-                filtered.forEach((item, index, arr)=>{
-                    matches[item.FI] = matches[item.FI] || {};
-                    //matches[item.FI].id = 1;
-                    matches[item.FI].created_time = new Date();
-                    matches[item.FI].bet365_id = item.FI;
-    
-                    if(item.BC){
-                        // 主队名
-                        matches[item.FI].host_team = item.NA;
-    
-                        // 主队胜，赔率
-                        matches[item.FI].host_odds = getOddsById(item.ID, filtered_odds);
-    
-                        // 比赛开始时间
-                        matches[item.FI].begin_time = item.BC;          
-                        
-                        // 20180810200000
-                        let time_str = item.BC + '';
-                        let year = parseInt(time_str.slice(0, 4)),
-                        month = parseInt(time_str.slice(4, 6)),
-                        day = parseInt(time_str.slice(6, 8)),
-                        hour = parseInt(time_str.slice(8, 10)),
-                        minitue = parseInt(time_str.slice(10, 12)),
-                        secends = parseInt(time_str.slice(12, 14));
-                        let time = new Date(year, month-1, day, hour, minitue, secends);
-                        let beijing_time = new Date(time.getTime() + 7*3600*1000);
-                        
-                        matches[item.FI].begin_time = beijing_time;
+                .proxy('http://127.0.0.1:8888')
+                .end((err, res) => {
+
+                    if(!res || err){
+                        count++;
+                        console.log(chalk.red('task4 err' + err));
+                        if(count == categoryArr.length){
+                            resolve(categoryArr);
+                        }
                     }
-                    else if(item.NA == '平局'){
-                        matches[item.FI].equal_odds = getOddsById(item.ID, filtered_odds);       // 平局，赔率
+        
+                    let jsons = [];
+                    if(res && res.text){
+                        jsons = J.getJSONs(res.text);
                     }
-                    else{
-                        matches[item.FI].guest_team = item.NA;          // 客队名
-                        matches[item.FI].guest_odds = getOddsById(item.ID, filtered_odds);  // 客队胜，赔率
-                        matches[item.FI].analyse_url = item.EX || '';         // 两队历史数据
+        
+                    let filtered = jsons.filter((item, index, arr)=>{
+                        return !!item.FI && item.NA && !/^\d+$/.test(item.NA) && !item.AH;
+                    })
+        
+                    let filtered_odds = jsons.filter((item, index, arr)=>{
+                        return !!item.FI && !item.NA && item.OD && !item.HA;
+                    })
+        
+                    let matches = {};
+                    filtered.forEach((item, index, arr)=>{
+                        matches[item.FI] = matches[item.FI] || {};
+                        //matches[item.FI].id = 1;
+                        matches[item.FI].created_time = new Date();
+                        matches[item.FI].bet365_id = item.FI;
+        
+                        if(item.BC){
+                            // 主队名
+                            matches[item.FI].host_team = item.NA;
+        
+                            // 主队胜，赔率
+                            matches[item.FI].host_odds = getOddsById(item.ID, filtered_odds);
+        
+                            // 比赛开始时间
+                            matches[item.FI].begin_time = item.BC;          
+                            
+                            // 20180810200000
+                            let time_str = item.BC + '';
+                            let year = parseInt(time_str.slice(0, 4)),
+                            month = parseInt(time_str.slice(4, 6)),
+                            day = parseInt(time_str.slice(6, 8)),
+                            hour = parseInt(time_str.slice(8, 10)),
+                            minitue = parseInt(time_str.slice(10, 12)),
+                            secends = parseInt(time_str.slice(12, 14));
+                            let time = new Date(year, month-1, day, hour, minitue, secends);
+                            let beijing_time = new Date(time.getTime() + 7*3600*1000);
+                            
+                            matches[item.FI].begin_time = beijing_time;
+                        }
+                        else if(item.NA == '平局'){
+                            matches[item.FI].equal_odds = getOddsById(item.ID, filtered_odds);       // 平局，赔率
+                        }
+                        else{
+                            matches[item.FI].guest_team = item.NA;          // 客队名
+                            matches[item.FI].guest_odds = getOddsById(item.ID, filtered_odds);  // 客队胜，赔率
+                            matches[item.FI].analyse_url = item.EX || '';         // 两队历史数据
+                        }
+                        
+                    })
+    
+                    // console.log(filtered)
+                    
+                    for(let item in matches){
+
+                        let match = matches[item];
+                        
+                        setTimeout(()=>{
+                            Game.findOrCreate({
+                                where: {
+                                    bet365_id: match.bet365_id
+                                }, 
+                                defaults: {
+                                    host_team: match.host_team, 
+                                    guest_team: match.guest_team,
+                                    begin_time: match.begin_time,
+                                    analyse_url: match.analyse_url,
+                                    created_time: match.created_time,
+                                    bet365_id: match.bet365_id,
+                                    bet365_category_id: bet365_category_id
+                                }
+                            })
+                            .spread((game, created) => {
+                                count++;
+                                // console.log(game);
+                                if(count == categoryArr.length){
+                                    resolve(matches);
+                                }
+                            })
+                            .catch((err)=>{
+                                count++;
+                                if(count == categoryArr.length){
+                                    resolve(matches);
+                                }
+                            })
+                        }, 3500 * index);
                     }
                     
-                })
+                });
+            }, 3500*index);
 
-                console.log(filtered)
-
-                
-                
-                for(let item in matches){
-
-                
-                    let match = matches[item];
-                    console.log(match);
-                    GameSubCategory.findOrCreate({
-                        where: {
-                            bet365_id: match.bet365_id
-                        }, 
-                        defaults: {
-                            host_team: match.host_team, 
-                            guest_team: match.guest_team,
-                            begin_time: match.begin_time,
-                            analyse_url: match.analyse_url,
-                            created_time: match.created_time,
-                            bet365_id: match.bet365_id
-                        }
-                    })
-                    .spread((game, created) => {
-                        count++;
-                        // console.log(game);
-                        if(count == categoryArr.length){
-                            resolve(results);
-                        }
-                    })
-                }
-                
-            });
         })
-
         
     })
 }
 
 
 
-
-task1('A11313').then(task2).then(task3);
+task1('A11313').then(task2).then(task3).then(task4).catch((err)=>{
+    console.log('final err' + err);
+});
